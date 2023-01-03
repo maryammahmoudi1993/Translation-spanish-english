@@ -33,3 +33,4 @@ def split_data(text_pairs):
     val_pairs = text_pairs[num_train_data:num_train_data + num_val_data] # validation data from train numbers to the sum of train and validation numbers
     test_pairs = text_pairs[num_train_data + num_val_data:] # test data from sum of train and validation numbers to the end
     return train_pairs, val_pairs, test_pairs
+train_pairs, val_pairs, test_pairs = split_data(text_pairs)
