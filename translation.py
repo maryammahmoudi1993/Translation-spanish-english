@@ -4,6 +4,9 @@ import tensorflow as tf
 import re
 
 # Data and Preprocessing 
+# variables
+vocab_size = 15000
+sequence_length = 20
 # Load dataset
 path = "D:\Python_Codes\Deep_Learning\Term 2\Translation spanish english\spa.txt"
 print(path)
@@ -44,5 +47,21 @@ def standardization(input_string):
     strip_char = string.punctuation.replace("[", "") # change [ with nothing for [start] and [end]
     strip_char = string.punctuation.replace("]", "") # change ] with nothing for [start] and [end]
     lowercase = tf.string.lower(input_string)
+
     return tf.strings.regex_replace(lowercase, f"[{re.escape(strip_char)}]") # remove any punctuations from input
 
+# Tokenization
+def tokenization(train_pairs):
+    source_vectorization = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_mode='int', output_sequence_length=sequence_length) # English vectorization
+    target_vectorization = tf.keras.layers.TextVectorization(max_tokens=vocab_size, output_mode='int', output_sequence_length=sequence_length+1,
+                                                            standardize = standardization) # Spanish vectorization
+    
+
+    train_english_text = [pair[0] for pair in test_pairs] # all english sentences: [eng1, eng2, ...]
+    train_spanish_text = [pair[1] for pair in test_pairs] # all spanish sentences: [esp1, esp2, ...]
+
+    source_vectorization.adapt(train_english_text) # vectorization english tokens
+    target_vectorization.adapt(train_spanish_text) # vectorization spanish tokens
+    print("[INFO] data tokenized and converted to int numbers")
+
+    return source_vectorization, target_vectorization
