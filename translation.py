@@ -1,4 +1,7 @@
 import random
+import string
+import tensorflow as tf
+import re
 
 # Data and Preprocessing 
 # Load dataset
@@ -34,3 +37,12 @@ def split_data(text_pairs):
     test_pairs = text_pairs[num_train_data + num_val_data:] # test data from sum of train and validation numbers to the end
     return train_pairs, val_pairs, test_pairs
 train_pairs, val_pairs, test_pairs = split_data(text_pairs)
+
+# Standardization
+def standardization(input_string):
+    strip_char = string.punctuation + "¿" + "¡" + "á" + "é" + "í" + "ó" + "ú" + "ñ" + "ü" # add accent letters in spanish
+    strip_char = string.punctuation.replace("[", "") # change [ with nothing for [start] and [end]
+    strip_char = string.punctuation.replace("]", "") # change ] with nothing for [start] and [end]
+    lowercase = tf.string.lower(input_string)
+    return tf.strings.regex_replace(lowercase, f"[{re.escape(strip_char)}]") # remove any punctuations from input
+
