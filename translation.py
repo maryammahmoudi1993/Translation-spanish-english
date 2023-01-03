@@ -3,7 +3,7 @@ import string
 import tensorflow as tf
 import re
 
-# Data and Preprocessing 
+#  ----------------------------------Data and Preprocessing-------------------------------------- 
 # variables
 vocab_size = 15000 # length of all data(vocabularies)
 sequence_length = 20 # length of each sentence
@@ -65,3 +65,11 @@ def tokenization(train_pairs):
     print("[INFO] data tokenized and converted to int numbers")
 
     return source_vectorization, target_vectorization
+source_vectorization, target_vectorization = tokenization(train_pairs) 
+
+
+#  ----------------------------------Define Network And Training--------------------------------------
+def format_dataset(eng, esp): # prepareing input and output 
+    eng = source_vectorization(eng)
+    esp = target_vectorization(esp)
+    return ({"english": eng, "spanish": esp[:, :-1]}, esp[:, 1:]) # label
