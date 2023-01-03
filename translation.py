@@ -5,8 +5,8 @@ import re
 
 # Data and Preprocessing 
 # variables
-vocab_size = 15000
-sequence_length = 20
+vocab_size = 15000 # length of all data(vocabularies)
+sequence_length = 20 # length of each sentence
 # Load dataset
 path = "D:\Python_Codes\Deep_Learning\Term 2\Translation spanish english\spa.txt"
 print(path)
