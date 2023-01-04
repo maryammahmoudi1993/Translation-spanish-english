@@ -9,15 +9,12 @@ vocab_size = 15000 # length of all data(vocabularies)
 sequence_length = 20 # length of each sentence
 # Load dataset
 path = "D:\Python_Codes\Deep_Learning\Term 2\Translation spanish english\spa.txt"
-print('1'+path)
-
+print(path)
 def load_doc(path): # load dataset
     with open(path, encoding="utf-8") as f:
-        lines = f.read().split("\n")[-1] # read data --> split them every line --> don't read the last line because it's empty
-        print(lines[5])
+        lines = f.read().split("\n")[:-1] # read data --> split them every line --> don't read the last line because it's empty
     return lines
-lines = load_doc(path=path)
-print('2'+lines)
+lines = load_doc(path)
 
 # Esp-Eng pairs
 def creat_pairs(lines): 
@@ -28,7 +25,7 @@ def creat_pairs(lines):
         text_pairs.append((english, spanish))
         return text_pairs
 text_pairs = creat_pairs(lines)
-print('3'+text_pairs)
+
 # Split data to train-test-validation
 train_per = 0.7
 test_per = 0.15
@@ -75,4 +72,5 @@ source_vectorization, target_vectorization = tokenization(train_pairs)
 def format_dataset(eng, esp): # prepareing input and output 
     eng = source_vectorization(eng)
     esp = target_vectorization(esp)
-    return ({"english": eng, "spanish": esp[:, :-1]}, esp[:, 1:]) # lables
+    return ({"english": eng, "spanish": esp[:, :-1]}, esp[:, 1:]) # label
+
