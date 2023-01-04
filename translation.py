@@ -20,7 +20,7 @@ lines = load_doc(path)
 def creat_pairs(lines): 
     text_pairs = []
     for line in lines:
-        english, spanish = line.split("\t") # creating english and spanish words by camma
+        english, spanish, other = line.split("\t") # creating english and spanish words by camma
         spanish = "[start]" + spanish + "[end]" # Add [start] and [end] to spanish words
         text_pairs.append((english, spanish))
         return text_pairs
