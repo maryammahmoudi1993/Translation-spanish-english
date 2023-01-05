@@ -45,12 +45,12 @@ train_pairs, val_pairs, test_pairs = split_data(text_pairs)
 
 # Standardization
 def standardization(input_string):
-    strip_char = string.punctuation + "¿" + "¡" + "á" + "é" + "í" + "ó" + "ú" + "ñ" + "ü" # add accent letters in spanish
+    strip_char = string.punctuation + "¿" + "¿" + "á" + "é" + "í" + "ó" + "ú" + "ñ" + "ü" # add accent letters in spanish
     strip_char = strip_char.replace("[", "") # change [ with nothing for [start] and [end]
     strip_char = strip_char.replace("]", "") # change ] with nothing for [start] and [end]
-    lowercase = tf.string.lower(input_string)
+    lowercase = tf.strings.lower(input_string)
 
-    return tf.strings.regex_replace(lowercase, f"[{re.escape(strip_char)}]") # remove any punctuations from input
+    return tf.strings.regex_replace(lowercase, f"[{re.escape(strip_char)}]", "") # remove any punctuations from input
 
 # Tokenization
 def tokenization(train_pairs):
