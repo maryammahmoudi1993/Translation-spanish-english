@@ -9,6 +9,7 @@ import re
 # variables
 vocab_size = 15000 # length of all data(vocabularies)
 sequence_length = 20 # length of each sentence
+batch_size = 64 # batch size length
 # Load dataset
 path = "D:\Python_Codes\Deep_Learning\Term 2\Translation spanish english\spa.txt"
 print(path)
@@ -76,3 +77,11 @@ def format_dataset(eng, esp): # prepareing input and output
     esp = target_vectorization(esp)
     return ({"english": eng, "spanish": esp[:, :-1]}, esp[:, 1:]) # label
 
+def make_dataset(pairs): # using tf.data for running faster
+    eng_texts, esp_texts = zip(*pairs) # seperate english and spanish pairs
+    eng_texts = list(eng_texts) # make english text list
+    esp_text = list(esp_texts) # make spanish text list
+    dataset = tf.data.Dataset.from_tensor_slices((eng_texts, esp_text)) # turning to tensorflow 
+    dataset = dataset.batch(batch_size=batch_size) # slicing to batch size
+    dataset = dataset.map(format_dataset, num_parallel_calls=4) # prepairing input and out puts ---> making parallel cells in order to run faster
+    return dataset.shuffle(2048)
