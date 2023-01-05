@@ -90,6 +90,7 @@ def make_dataset(pairs): # using tf.data for running faster
 train_ds = make_dataset(train_pairs)
 val_ds = make_dataset(val_pairs)
 
+#------- Encoder
 # defining english inputs
 embed_dim = 256
 source = layers.Input(shape=(None,), dtype="int64", name="english")
@@ -103,3 +104,21 @@ encode_source = layers.Bidirectional(layers.GRU(latent_dim),merge_mode="sum")(x)
 
 past_target = layers.Input(shape=(None,), dtype="int64", name="spanish")
 y = layers.Embedding(vocab_size, embed_dim, mask_zero=True)(past_target)
+
+
+#--------Decoder
+# define decoder
+y = layers.GRU(latent_dim, return_sequences=True)(y,initial_state=encode_source)
+
+# define output layers
+y = layers.TimeDistributed(layers.Dropout(0.5))(y)
+target_next_step = layers.TimeDistributed(layers.Dense(vocab_size, activation="softmax"))(y)
+
+# make model
+seq2seq_rnn = keras.Model([source, past_target], target_next_step)
+
+# define train parameters
+seq2seq_rnn.compile(optimizer="adam", loss= "sparse_categorical_crossentropy", metrics=["accuracy"])
+
+# train model
+seq2seq_rnn.fit(train_ds, epochs=15, validation_data=val_ds)
