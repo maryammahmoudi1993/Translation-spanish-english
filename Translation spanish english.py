@@ -1,5 +1,7 @@
 import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+import keras
+from keras import layers
 import random
 import string
 import tensorflow as tf
@@ -88,3 +90,16 @@ def make_dataset(pairs): # using tf.data for running faster
 train_ds = make_dataset(train_pairs)
 val_ds = make_dataset(val_pairs)
 
+# defining english inputs
+embed_dim = 256
+source = layers.Input(shape=(None,), dtype="int64", name="english")
+x = layers.Embedding(vocab_size, embed_dim, mask_zero=True)(source)
+
+# define encoder
+latent_dim = 1024
+encode_source = layers.Bidirectional(layers.GRU(latent_dim),merge_mode="sum")(x)
+
+# define spanish layers
+
+past_target = layers.Input(shape=(None,), dtype="int64", name="spanish")
+y = layers.Embedding(vocab_size, embed_dim, mask_zero=True)(past_target)
