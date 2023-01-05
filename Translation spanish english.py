@@ -85,3 +85,6 @@ def make_dataset(pairs): # using tf.data for running faster
     dataset = dataset.batch(batch_size=batch_size) # slicing to batch size
     dataset = dataset.map(format_dataset, num_parallel_calls=4) # prepairing input and out puts ---> making parallel cells in order to run faster
     return dataset.shuffle(2048)
+train_ds = make_dataset(train_pairs)
+val_ds = make_dataset(val_pairs)
+
