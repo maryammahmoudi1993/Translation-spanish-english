@@ -188,4 +188,4 @@ def corpus_bleu(hypotheses, references):
     hyps = [" ".join(h) for h in hypotheses]
     width = max(len(r) for r in references)
     streams = [[" ".join(tokenize(r[min(k, len(r) - 1)])) for r in references] for k in range(width)]
-    return sacrebleu.corpus_bleu(hyps, streams, tokenize="none", lowercase=False).score
+    return sacrebleu.corpus_bleu(hyps, streams, tokenize="none", lowercase=False, force=True).score    # force: our text is tokenised on purpose
