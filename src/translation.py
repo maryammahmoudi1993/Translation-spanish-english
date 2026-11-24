@@ -189,3 +189,58 @@ def corpus_bleu(hypotheses, references):
     width = max(len(r) for r in references)
     streams = [[" ".join(tokenize(r[min(k, len(r) - 1)])) for r in references] for k in range(width)]
     return sacrebleu.corpus_bleu(hyps, streams, tokenize="none", lowercase=False, force=True).score    # force: our text is tokenised on purpose
+
+
+# ---------------------------------------------------------------- figures
+def plot_seq2seq():
+    """The encoder-decoder with teacher forcing, drawn with boxes and arrows (training view)."""
+    fig, ax = plt.subplots(figsize=(11, 4))
+    ax.axis("off")
+    english = ["how", "are", "you", "?"]
+    spanish_in = ["<start>", "¿", "cómo", "estás", "?"]
+    spanish_out = ["¿", "cómo", "estás", "?", "<end>"]
+    for i, word in enumerate(english):
+        ax.text(i * 1.3, 0, word, ha="center", va="center", fontsize=10, bbox=dict(boxstyle="round", fc="#f2f2f2", ec="#555555"))
+        ax.text(i * 1.3, 1.1, "LSTM", ha="center", va="center", fontsize=9, bbox=dict(boxstyle="round", fc="#dbe9f7", ec="#555555"))
+        ax.annotate("", xy=(i * 1.3, 0.85), xytext=(i * 1.3, 0.25), arrowprops=dict(arrowstyle="->", color="#555555"))
+        if i:
+            ax.annotate("", xy=(i * 1.3 - 0.45, 1.1), xytext=((i - 1) * 1.3 + 0.45, 1.1), arrowprops=dict(arrowstyle="->", color="#555555"))
+    ax.text(1.95, 1.9, "ENCODER reads the English sentence", ha="center", fontsize=9, color="#1f4e79")
+    start = 6.2
+    for j, (inp, out) in enumerate(zip(spanish_in, spanish_out)):
+        x = start + j * 1.3
+        ax.text(x, 0, inp, ha="center", va="center", fontsize=10, bbox=dict(boxstyle="round", fc="#f2f2f2", ec="#555555"))
+        ax.text(x, 1.1, "LSTM", ha="center", va="center", fontsize=9, bbox=dict(boxstyle="round", fc="#fde7d9", ec="#555555"))
+        ax.text(x, 2.2, out, ha="center", va="center", fontsize=10, bbox=dict(boxstyle="round", fc="#e8f5e9", ec="#555555"))
+        ax.annotate("", xy=(x, 0.85), xytext=(x, 0.25), arrowprops=dict(arrowstyle="->", color="#555555"))
+        ax.annotate("", xy=(x, 1.95), xytext=(x, 1.35), arrowprops=dict(arrowstyle="->", color="#555555"))
+        if j:
+            ax.annotate("", xy=(x - 0.45, 1.1), xytext=(x - 1.3 + 0.45, 1.1), arrowprops=dict(arrowstyle="->", color="#555555"))
+    ax.annotate("", xy=(start - 0.45, 1.1), xytext=(3 * 1.3 + 0.45, 1.1),
+                arrowprops=dict(arrowstyle="->", color="#c0392b", lw=2))
+    ax.text(5.0, 0.6, "the sentence summary\n(the LSTM state)", ha="center", fontsize=8, color="#c0392b")
+    ax.text(start + 2.6, -0.8, "inputs of the DECODER: the correct Spanish words so far (teacher forcing)", ha="center", fontsize=8, color="#444444")
+    ax.text(start + 2.6, 2.85, "what the decoder must predict: the next word at every step", ha="center", fontsize=9, color="#2e7d32")
+    ax.set_xlim(-0.8, 13); ax.set_ylim(-1.2, 3.2)
+    return fig
+
+
+def plot_training(history):
+    """Loss and accuracy per epoch for training and validation."""
+    fig, (a, b) = plt.subplots(1, 2, figsize=(10, 3.4))
+    epochs = range(1, len(history["loss"]) + 1)
+    a.plot(epochs, history["loss"], "--o", ms=3, label="training"); a.plot(epochs, history["val_loss"], "-o", ms=3, label="validation")
+    a.set_title("loss (lower is better)"); b.plot(epochs, history["accuracy"], "--o", ms=3, label="training")
+    b.plot(epochs, history["val_accuracy"], "-o", ms=3, label="validation"); b.set_title("accuracy of the next word (higher is better)")
+    for ax in (a, b):
+        ax.set_xlabel("epoch"); ax.grid(alpha=.3); ax.legend()
+    return fig
+
+
+def plot_bars(labels, values, title):
+    fig, ax = plt.subplots(figsize=(6.5, 3))
+    ax.bar(labels, values, color="tab:blue")
+    for k, v in enumerate(values):
+        ax.text(k, v, f"{v:.1f}", ha="center", va="bottom", fontsize=9)
+    ax.set_title(title, fontsize=10); ax.set_ylabel("BLEU")
+    return fig
