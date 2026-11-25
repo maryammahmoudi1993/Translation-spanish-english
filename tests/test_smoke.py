@@ -57,3 +57,28 @@ def test_bleu_is_100_for_a_perfect_copy_and_low_for_nonsense():
     perfect = [tr.tokenize("Hola, mundo."), tr.tokenize("¿Qué tal?")]
     assert tr.corpus_bleu(perfect, refs) > 99.9
     assert tr.corpus_bleu([["xx"], ["yy"]], refs) < 1.0
+
+
+def test_attention_model_weights_are_valid_and_ignore_padding():
+    pairs = [("I run.", "Corro."), ("You run fast.", "Corres rápido."), ("We run.", "Corremos.")] * 8
+    source_vocab = tr.Vocabulary([tr.tokenize(e) for e, _ in pairs], 30)
+    target_vocab = tr.Vocabulary([tr.tokenize(s) for _, s in pairs], 30)
+    source, decoder_in, decoder_out = tr.encode_pairs(pairs, source_vocab, target_vocab)
+    tr.set_seed()
+    model, encoder, decoder = tr.build_attention_seq2seq(len(source_vocab), len(target_vocab), embedding=8, units=16)
+    model.compile("adam", "sparse_categorical_crossentropy")
+    history = model.fit([source, decoder_in], decoder_out, epochs=30, batch_size=8, verbose=0).history
+    assert history["loss"][-1] < history["loss"][0]
+    translations, maps = tr.translate_with_attention(encoder, decoder, source[:4], target_vocab)
+    assert len(translations) == 4
+    for i, weights in enumerate(maps):
+        real = source[i] != 0
+        assert weights.shape[1] == tr.MAX_LEN and np.allclose(weights.sum(axis=1), 1.0, atol=1e-4)    # weights add up to 1
+        assert weights[:, ~real].max() < 1e-6                                                          # nothing is attended in the padding
+
+
+def test_bootstrap_of_identical_systems_is_centred_on_zero():
+    refs = [["hola mundo"], ["¿cómo estás?"], ["buenos días"], ["adiós"]] * 10
+    hyps = [tr.tokenize("hola mundo"), tr.tokenize("cómo estás"), tr.tokenize("buenos días"), tr.tokenize("adiós")] * 10
+    differences = tr.bootstrap_bleu_difference(hyps, hyps, refs, resamples=5)
+    assert np.allclose(differences, 0.0)
