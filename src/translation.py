@@ -353,3 +353,19 @@ def plot_bleu_comparison(labels, baseline, attention):
     ax.set_xticks(x); ax.set_xticklabels(labels); ax.set_ylabel("BLEU"); ax.legend(fontsize=8)
     ax.set_title("BLEU by length of the English sentence", fontsize=10)
     return fig
+
+
+def plot_attention_idea():
+    """An illustration of attention with made-up weights: the decoder, about to write "cómo", looks mostly at "how"."""
+    english = ["how", "are", "you", "?"]
+    weights = [0.70, 0.12, 0.10, 0.08]
+    fig, ax = plt.subplots(figsize=(7.5, 3.2))
+    ax.axis("off")
+    for k, (word, w) in enumerate(zip(english, weights)):
+        ax.text(k * 1.5, 0, word, ha="center", va="center", fontsize=11, bbox=dict(boxstyle="round", fc="#dbe9f7", ec="#555555"))
+        ax.annotate("", xy=(k * 1.5, 0.35), xytext=(2.25, 1.55), arrowprops=dict(arrowstyle="->", color="#c0392b", lw=1 + 7 * w, alpha=.8))
+        ax.text(k * 1.5, -0.45, f"{w:.2f}", ha="center", fontsize=9, color="#c0392b")
+    ax.text(2.25, 1.75, "decoder state: about to write the next word", ha="center", fontsize=10, bbox=dict(boxstyle="round", fc="#fde7d9", ec="#555555"))
+    ax.set_xlim(-0.8, 5.3); ax.set_ylim(-0.8, 2.2)
+    ax.set_title("illustration (made-up weights): thicker arrow = more attention", fontsize=9)
+    return fig
