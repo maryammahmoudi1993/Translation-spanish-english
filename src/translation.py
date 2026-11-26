@@ -244,3 +244,128 @@ def plot_bars(labels, values, title):
         ax.text(k, v, f"{v:.1f}", ha="center", va="bottom", fontsize=9)
     ax.set_title(title, fontsize=10); ax.set_ylabel("BLEU")
     return fig
+
+
+# ---------------------------------------------------------------- notebook 02: the same model with attention
+def build_attention_seq2seq(source_size, target_size, embedding=128, units=256):
+    """The encoder-decoder of ``build_seq2seq`` plus attention (dot-product attention, Luong et al., 2015).
+
+    The encoder now returns its state at *every* English word. At every step the decoder compares its own state with all of them,
+    turns the scores into weights that add up to 1 (the attention weights) and mixes the encoder states with these weights into a "context".
+    Returns (training model, encoder model, decoder step model). The encoder model returns (all encoder states, h, c);
+    the decoder step model takes (token, h, c, all encoder states, mask of the real English words) and returns (probabilities, h, c, attention weights).
+    """
+    source = keras.Input((MAX_LEN,), dtype="int32", name="english")
+    source_mask = keras.layers.Lambda(lambda s: keras.ops.not_equal(s, 0), output_shape=(MAX_LEN,), name="real_words")(source)
+    embed_source = keras.layers.Embedding(source_size, embedding, mask_zero=True, name="embed_english")
+    encoder_lstm = keras.layers.LSTM(units, return_sequences=True, return_state=True, name="encoder")
+    encoder_states, state_h, state_c = encoder_lstm(embed_source(source))
+
+    decoder_input = keras.Input((None,), dtype="int32", name="spanish_so_far")
+    embed_target = keras.layers.Embedding(target_size, embedding, mask_zero=True, name="embed_spanish")
+    decoder_lstm = keras.layers.LSTM(units, return_sequences=True, return_state=True, name="decoder")
+    attention = keras.layers.Attention(name="attention")
+    combine = keras.layers.Dense(units, activation="tanh", name="combine")
+    dropout = keras.layers.Dropout(0.3)
+    output_layer = keras.layers.Dense(target_size, activation="softmax", name="next_word")
+
+    decoded, _, _ = decoder_lstm(embed_target(decoder_input), initial_state=[state_h, state_c])
+    context = attention([decoded, encoder_states], mask=[None, source_mask])
+    probabilities = output_layer(dropout(combine(keras.layers.Concatenate()([decoded, context]))))
+    training = keras.Model([source, decoder_input], probabilities, name="seq2seq_attention")
+
+    encoder = keras.Model(source, [encoder_states, state_h, state_c], name="encoder_model")
+    step_input = keras.Input((1,), dtype="int32")
+    h_in, c_in = keras.Input((units,)), keras.Input((units,))
+    states_in = keras.Input((MAX_LEN, units))
+    mask_in = keras.Input((MAX_LEN,), dtype="bool")
+    step_out, h_out, c_out = decoder_lstm(embed_target(step_input), initial_state=[h_in, c_in])
+    # the attention layer has no weights of its own (plain dot product), so a second instance for the step model shares nothing that is learned
+    step_attention = keras.layers.Attention(name="attention_step")
+    step_context, weights = step_attention([step_out, states_in], mask=[None, mask_in], return_attention_scores=True)
+    step_probabilities = output_layer(dropout(combine(keras.layers.Concatenate()([step_out, step_context]))))
+    decoder = keras.Model([step_input, h_in, c_in, states_in, mask_in], [step_probabilities, h_out, c_out, weights], name="decoder_model")
+    return training, encoder, decoder
+
+
+def translate_with_attention(encoder, decoder, source_array, target_vocab):
+    """Greedy translation with the attention model. Returns (translations, attention) where ``attention[i]`` is an array of shape
+    (steps, MAX_LEN): the weights that the decoder gave to the English positions at each step (including the step that wrote <end>)."""
+    states, h, c = encoder.predict(source_array, verbose=0)
+    mask = source_array != 0
+    token = np.full((len(source_array), 1), 2, dtype="int32")
+    finished = np.zeros(len(source_array), dtype=bool)
+    outputs = [[] for _ in range(len(source_array))]
+    maps = [[] for _ in range(len(source_array))]
+    for _ in range(MAX_LEN + 1):
+        probabilities, h, c, weights = decoder.predict([token, h, c, states, mask], verbose=0)
+        token = probabilities[:, 0, :].argmax(axis=1).astype("int32")[:, None]
+        for i, t in enumerate(token[:, 0]):
+            if not finished[i]:
+                maps[i].append(weights[i, 0])
+                if t == 3:
+                    finished[i] = True
+                else:
+                    outputs[i].append(int(t))
+        if finished.all():
+            break
+    return [target_vocab.decode(o) for o in outputs], [np.array(m) for m in maps]
+
+
+def bootstrap_bleu_difference(hypotheses_a, hypotheses_b, references, resamples=200, seed=SEED):
+    """Paired bootstrap: resample the test sentences with replacement and compute BLEU(a) - BLEU(b) on every resample.
+    Returns the array of differences (its 2.5% and 97.5% percentiles give a 95% interval)."""
+    rng = np.random.default_rng(seed)
+    n = len(references)
+    differences = []
+    for _ in range(resamples):
+        index = rng.integers(0, n, n)
+        a = corpus_bleu([hypotheses_a[i] for i in index], [references[i] for i in index])
+        b = corpus_bleu([hypotheses_b[i] for i in index], [references[i] for i in index])
+        differences.append(a - b)
+    return np.array(differences)
+
+
+def plot_attention_maps(items):
+    """Heat maps of attention weights. ``items``: list of (English tokens, Spanish tokens incl. <end>, weights (steps x English tokens))."""
+    columns = 2
+    rows = (len(items) + 1) // 2
+    fig, axes = plt.subplots(rows, columns, figsize=(5.2 * columns, 3.6 * rows))
+    for ax, (english, spanish, weights) in zip(np.ravel(axes), items):
+        ax.imshow(weights, cmap="Blues", vmin=0, vmax=1, aspect="auto")
+        ax.set_xticks(range(len(english))); ax.set_xticklabels(english, rotation=60, ha="right", fontsize=8)
+        ax.set_yticks(range(len(spanish))); ax.set_yticklabels(spanish, fontsize=8)
+        ax.set_xlabel("English word (what the decoder looks at)", fontsize=8); ax.set_ylabel("Spanish word written", fontsize=8)
+    for ax in np.ravel(axes)[len(items):]:
+        ax.axis("off")
+    fig.tight_layout()
+    return fig
+
+
+def plot_bleu_comparison(labels, baseline, attention):
+    fig, ax = plt.subplots(figsize=(7.5, 3.4))
+    x = np.arange(len(labels))
+    ax.bar(x - 0.19, baseline, 0.38, label="without attention (notebook 01)", color="tab:gray")
+    ax.bar(x + 0.19, attention, 0.38, label="with attention", color="tab:orange")
+    for k in range(len(labels)):
+        ax.text(x[k] - 0.19, baseline[k], f"{baseline[k]:.1f}", ha="center", va="bottom", fontsize=8)
+        ax.text(x[k] + 0.19, attention[k], f"{attention[k]:.1f}", ha="center", va="bottom", fontsize=8)
+    ax.set_xticks(x); ax.set_xticklabels(labels); ax.set_ylabel("BLEU"); ax.legend(fontsize=8)
+    ax.set_title("BLEU by length of the English sentence", fontsize=10)
+    return fig
+
+
+def plot_attention_idea():
+    """An illustration of attention with made-up weights: the decoder, about to write "cómo", looks mostly at "how"."""
+    english = ["how", "are", "you", "?"]
+    weights = [0.70, 0.12, 0.10, 0.08]
+    fig, ax = plt.subplots(figsize=(7.5, 3.2))
+    ax.axis("off")
+    for k, (word, w) in enumerate(zip(english, weights)):
+        ax.text(k * 1.5, 0, word, ha="center", va="center", fontsize=11, bbox=dict(boxstyle="round", fc="#dbe9f7", ec="#555555"))
+        ax.annotate("", xy=(k * 1.5, 0.35), xytext=(2.25, 1.55), arrowprops=dict(arrowstyle="->", color="#c0392b", lw=1 + 7 * w, alpha=.8))
+        ax.text(k * 1.5, -0.45, f"{w:.2f}", ha="center", fontsize=9, color="#c0392b")
+    ax.text(2.25, 1.75, "decoder state: about to write the next word", ha="center", fontsize=10, bbox=dict(boxstyle="round", fc="#fde7d9", ec="#555555"))
+    ax.set_xlim(-0.8, 5.3); ax.set_ylim(-0.8, 2.2)
+    ax.set_title("illustration (made-up weights): thicker arrow = more attention", fontsize=9)
+    return fig
