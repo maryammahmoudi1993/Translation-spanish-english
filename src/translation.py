@@ -247,17 +247,19 @@ def plot_bars(labels, values, title):
 
 
 # ---------------------------------------------------------------- notebook 02: the same model with attention
-def build_attention_seq2seq(source_size, target_size, embedding=128, units=256):
+def build_attention_seq2seq(source_size, target_size, embedding=128, units=256, source_embeddings=None):
     """The encoder-decoder of ``build_seq2seq`` plus attention (dot-product attention, Luong et al., 2015).
 
     The encoder now returns its state at *every* English word. At every step the decoder compares its own state with all of them,
     turns the scores into weights that add up to 1 (the attention weights) and mixes the encoder states with these weights into a "context".
+    If ``source_embeddings`` (a matrix of shape source_size x embedding) is given, the English embedding table starts from it (and is still trained).
     Returns (training model, encoder model, decoder step model). The encoder model returns (all encoder states, h, c);
     the decoder step model takes (token, h, c, all encoder states, mask of the real English words) and returns (probabilities, h, c, attention weights).
     """
     source = keras.Input((MAX_LEN,), dtype="int32", name="english")
     source_mask = keras.layers.Lambda(lambda s: keras.ops.not_equal(s, 0), output_shape=(MAX_LEN,), name="real_words")(source)
-    embed_source = keras.layers.Embedding(source_size, embedding, mask_zero=True, name="embed_english")
+    initializer = "uniform" if source_embeddings is None else keras.initializers.Constant(source_embeddings)
+    embed_source = keras.layers.Embedding(source_size, embedding, mask_zero=True, embeddings_initializer=initializer, name="embed_english")
     encoder_lstm = keras.layers.LSTM(units, return_sequences=True, return_state=True, name="encoder")
     encoder_states, state_h, state_c = encoder_lstm(embed_source(source))
 
@@ -368,4 +370,54 @@ def plot_attention_idea():
     ax.text(2.25, 1.75, "decoder state: about to write the next word", ha="center", fontsize=10, bbox=dict(boxstyle="round", fc="#fde7d9", ec="#555555"))
     ax.set_xlim(-0.8, 5.3); ax.set_ylim(-0.8, 2.2)
     ax.set_title("illustration (made-up weights): thicker arrow = more attention", fontsize=9)
+    return fig
+
+
+# ---------------------------------------------------------------- notebook 03: pretrained English word vectors (GloVe)
+GLOVE_URL = ("https://github.com/RaRe-Technologies/gensim-data/releases/download/"
+             "glove-wiki-gigaword-50/glove-wiki-gigaword-50.gz")
+GLOVE_SHA256 = "5c55f98957aa9fed8d2ac5fb1dcff57af3b23c5a3ee7af3f7945f8d49198eb24"
+GLOVE_DIMENSION = 50
+
+
+def download_glove():
+    """Download the GloVe vectors (50 numbers for each of 400,000 English words, about 69 MB; Keras keeps them in ~/.keras/datasets,
+    nothing is stored in this repository) and check the SHA-256 checksum."""
+    return keras.utils.get_file("glove-wiki-gigaword-50.gz", GLOVE_URL, file_hash=GLOVE_SHA256, hash_algorithm="sha256")
+
+
+def glove_source_matrix(path, vocabulary, embedding=128, seed=SEED, return_missing=False):
+    """The starting English embedding table: for every word of ``vocabulary`` that GloVe knows, its 50 GloVe numbers fill the first 50
+    coordinates of the ``embedding`` coordinates; all other numbers (and all words GloVe does not know) are small random numbers.
+    Returns (matrix, number of words found); with ``return_missing=True`` also the list of vocabulary words that GloVe does not know."""
+    import gzip
+    rng = np.random.default_rng(seed)
+    matrix = rng.normal(0.0, 0.05, size=(len(vocabulary), embedding)).astype("float32")
+    matrix[0] = 0.0
+    found, seen = 0, set()
+    with gzip.open(path, "rt", encoding="utf-8") as handle:
+        next(handle)                                   # header line
+        for line in handle:
+            word, _, rest = line.partition(" ")
+            index = vocabulary.stoi.get(word)
+            if index is not None and index > 3:
+                matrix[index, :GLOVE_DIMENSION] = np.asarray(rest.split(), dtype="float32")
+                found += 1
+                seen.add(index)
+    if return_missing:
+        return matrix, found, [vocabulary.itos[i] for i in range(4, len(vocabulary)) if i not in seen]
+    return matrix, found
+
+
+def plot_conclusion(names, scores, notes):
+    """One bar per model: BLEU on the same 2,000 test sentences."""
+    fig, ax = plt.subplots(figsize=(8.5, 3.4))
+    positions = np.arange(len(names))[::-1]
+    colors = ["tab:gray", "tab:blue", "tab:orange", "tab:green"][:len(names)]
+    ax.barh(positions, scores, color=colors, alpha=.9)
+    for y, v, note in zip(positions, scores, notes):
+        ax.text(v + 0.3, y, f"{v:.1f}  {note}", va="center", fontsize=8)
+    ax.set_yticks(positions); ax.set_yticklabels(names, fontsize=9)
+    ax.set_xlabel("BLEU on the 2,000 test sentences (higher is better; our tokenised BLEU, not comparable with published scores)", fontsize=8)
+    ax.set_xlim(0, max(scores) * 1.55); ax.grid(axis="x", alpha=.3)
     return fig

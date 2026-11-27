@@ -82,3 +82,22 @@ def test_bootstrap_of_identical_systems_is_centred_on_zero():
     hyps = [tr.tokenize("hola mundo"), tr.tokenize("cómo estás"), tr.tokenize("buenos días"), tr.tokenize("adiós")] * 10
     differences = tr.bootstrap_bleu_difference(hyps, hyps, refs, resamples=5)
     assert np.allclose(differences, 0.0)
+
+
+def test_glove_matrix_fills_known_words_and_the_model_uses_it(tmp_path):
+    import gzip
+    path = tmp_path / "tiny.gz"
+    vectors = {"run": [1.0] * 50, "walk": [2.0] * 50}
+    with gzip.open(path, "wt", encoding="utf-8") as handle:
+        handle.write(f"2 50\n" + "".join(f"{w} " + " ".join(str(x) for x in v) + "\n" for w, v in vectors.items()))
+    pairs = [("I run.", "Corro."), ("I walk.", "Camino.")] * 6
+    source_vocab = tr.Vocabulary([tr.tokenize(e) for e, _ in pairs], 20)
+    target_vocab = tr.Vocabulary([tr.tokenize(s) for _, s in pairs], 20)
+    matrix, found = tr.glove_source_matrix(path, source_vocab, embedding=64)
+    assert tr.glove_source_matrix(path, source_vocab, embedding=64, return_missing=True)[2] == [w for w in source_vocab.itos[4:] if w not in vectors]
+    assert found == 2 and matrix.shape == (len(source_vocab), 64)
+    assert np.allclose(matrix[source_vocab.stoi["run"], :50], 1.0) and np.allclose(matrix[source_vocab.stoi["walk"], :50], 2.0)
+    assert np.allclose(matrix[0], 0.0)                                                       # padding row stays zero
+    model, encoder, decoder = tr.build_attention_seq2seq(len(source_vocab), len(target_vocab), embedding=64, units=16, source_embeddings=matrix)
+    table = model.get_layer("embed_english").get_weights()[0]
+    assert np.allclose(table[source_vocab.stoi["run"], :50], 1.0) and model.get_layer("embed_english").trainable
